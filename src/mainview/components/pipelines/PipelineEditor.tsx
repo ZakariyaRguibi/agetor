@@ -7,6 +7,7 @@ import {
   ReactFlow,
   ReactFlowProvider,
   useNodesState,
+  useNodesInitialized,
   useEdgesState,
   useReactFlow,
   type Connection,
@@ -20,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { useConfirm } from "@/components/ui/confirm";
 import { useTheme } from "@/components/theme-provider";
 import { useAgentProfiles } from "@/lib/agent-profiles";
+import { createPipelineStarter, PIPELINE_STARTERS, type PipelineStarterId } from "@/lib/pipeline-starters";
 import { api, ApiError } from "@/lib/api";
 import {
   autoLayout,
@@ -173,7 +175,9 @@ export function PipelineEditor(props: PipelineEditorProps) {
 function PipelineEditorInner({ pipelineId, onBack, onSaved, onDirtyChange, onOpenSettingsAgents }: PipelineEditorProps) {
   const confirm = useConfirm();
   const { resolved } = useTheme();
-  const { fitView } = useReactFlow();
+  const { fitView, getNodes } = useReactFlow();
+  const nodesInitialized = useNodesInitialized();
+  const [starterFitIds, setStarterFitIds] = useState<string[]>([]);
   const { profiles, loaded: profilesLoaded, refresh: refreshProfiles } = useAgentProfiles();
 
   const [harnesses, setHarnesses] = useState<Harness[]>([]);
@@ -604,6 +608,40 @@ function PipelineEditorInner({ pipelineId, onBack, onSaved, onDirtyChange, onOpe
     onDirtyChange?.(isDirty);
   }, [isDirty, onDirtyChange]);
 
+  const handleStarter = async (id: PipelineStarterId) => {
+    if (isDirty) {
+      const ok = await confirm({
+        title: "Replace this draft?",
+        description: "Your unsaved pipeline changes will be replaced by the selected template.",
+        confirmLabel: "Replace draft",
+      });
+      if (!ok) return;
+    }
+    const draft = createPipelineStarter(id);
+    setName(draft.name);
+    setDescription(draft.description ?? "");
+    setMaxStepsInput(String(draft.maxSteps));
+    setNodes(toFlowNodes(draft.graph, () => ({ onAppend: appendStep })));
+    setEdges(toFlowEdges(draft.graph).map((e) => ({ ...e, data: { ...e.data, onDelete: removeEdge } })));
+    setStartStepId(draft.graph.startStepId);
+    setSelectedStepId(draft.graph.steps[0]!.id);
+    setDetailsNodeId(null);
+    setDebouncedGraph(draft.graph);
+    setValidationError(null);
+    setStarterFitIds(draft.graph.steps.map((step) => step.id));
+    // Keep the original clean snapshot: a template is still an unsaved edit.
+  };
+
+  useEffect(() => {
+    if (!nodesInitialized || starterFitIds.length === 0) return;
+    const measured = getNodes();
+    // The old graph can still report initialized on the first render after
+    // replacement. Wait for the new identities AND their measured sizes.
+    if (!starterFitIds.every((id) => measured.some((node) => node.id === id && node.measured?.width && node.measured?.height))) return;
+    void fitView({ duration: 0, minZoom: 0.1 });
+    setStarterFitIds([]);
+  }, [nodesInitialized, starterFitIds, fitView, getNodes]);
+
   const handleAutoArrange = useCallback(() => {
     // Feed dagre each card's REAL measured height (React Flow's
     // `node.measured`) so a card taller than the layout estimate can't be
@@ -800,6 +838,31 @@ function PipelineEditorInner({ pipelineId, onBack, onSaved, onDirtyChange, onOpe
           </Button>
         </div>
       </div>
+
+      {!pipelineId && (
+        <section aria-labelledby="pipeline-starters-title" data-testid="pipeline-starters" className="border-b border-border bg-card px-4 py-3">
+          <h2 id="pipeline-starters-title" className="text-xs font-semibold">Start from a template</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Choose an agent for each step, with a separate reviewer. Templates stay editable and never start a run.
+          </p>
+          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+            {PIPELINE_STARTERS.map((starter) => (
+              <button
+                key={starter.id}
+                type="button"
+                data-testid={`pipeline-starter-${starter.id}`}
+                aria-label={`Use ${starter.name} template`}
+                disabled={saving}
+                onClick={() => void handleStarter(starter.id)}
+                className="rounded-md border border-border p-2 text-left hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+              >
+                <span className="block text-xs font-medium">{starter.name}</span>
+                <span className="mt-1 block text-xs text-muted-foreground">{starter.description}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
 
       <div className="relative flex min-h-0 flex-1">
         <div ref={canvasRef} data-testid="pipeline-canvas" className="relative min-w-0 flex-1">
