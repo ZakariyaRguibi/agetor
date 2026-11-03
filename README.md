@@ -177,6 +177,8 @@ Click a card to open its run panel. From there you can watch the transcript stre
 
 A **pipeline** chains several [Agents](#orchestrate) into a named, reusable graph of steps. For example, a planner hands off to an implementer, and a reviewer either approves the work or sends it back. You build pipelines on a full-page canvas (the **Pipelines** button in the header, or **Settings → Pipelines**), give each step its own Agent and instructions, and launch them like any other task.
 
+For a quick start, choose **New pipeline**, then **Plan → Build → Review** or **Build → Verify → Review**. Each template fills an editable draft with instructions and connected steps. Choose an Agent for each step and a separate reviewer, then Save. Loading or saving a template never starts agents. The starters run one task sequentially in its worktree; they do not schedule a sprint or automatically ship changes.
+
 ```mermaid
 flowchart LR
     Plan --> Implement --> Review
