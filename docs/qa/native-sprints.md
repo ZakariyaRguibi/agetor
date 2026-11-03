@@ -17,7 +17,7 @@ bun run typecheck
 bun node_modules/vite/bin/vite.js build
 ```
 
-Typecheck and client production build passed. Vite reports its existing future config-loader warning and large-chunk warnings; no signed native application build was attempted.
+Typecheck and client production build passed. Vite reports its existing future config-loader warning and large-chunk warnings. Subsequent local native installation evidence is recorded below.
 
 | Area | Evidence and boundary |
 | --- | --- |
@@ -46,3 +46,13 @@ An unchanged snapshot at starter commit `201a2cc` was tested separately. Eight f
 - Broader repository-suite failures above, and rulesets-only GitHub branch protection (currently blocked rather than accepted).
 
 Existing installed Agetor data and the prior Spec Kitty pilot are preserved. The prior pilot still reports `needs_attention`; do not run it concurrently with a native sprint for the same tickets. See [usage](../sprints.md) before launching any real batch.
+
+## Local Mac installation, 2026-11-03
+
+Built the stable-channel local variant `1.1.0-local.1`, including compiled notifier/disclaim/login-item helpers and daemon bundles. System tmux was absent, so the previous installed app's verified bundled tmux 3.6a and three libraries were reused for this build. The extracted application was ad-hoc signed and passed `codesign --verify --deep --strict` before and after installation at `/Applications/Agetor.app`.
+
+The original app and a consistent SQLite backup were preserved outside the repository in `~/Library/Application Support/Agetor Fork Backups/`. The installed app launched against its normal data directory. Local health, info, sprints and pipelines endpoints responded successfully. All 20 stored tasks, eight profiles, two pipelines and ten successful runs were preserved; task/run counts matched the backup, and no new model run started. Thirteen active/unarchived cards were visible under the existing UI filter. The three additive sprint tables were present.
+
+Native UI checks opened the Sprints editor and the pipeline editor, verified both starter buttons, and left the app on Sprints without saving or running a batch. The embedded update feed is empty; a focused mocked updater check confirmed no local-feed fetch/application while ordinary release checking remains available. TypeScript passed after the packaging changes. An initial health script correctly received 403 when it tried a desktop-only updater endpoint with the CLI token; the corrected read-only health check passed.
+
+This establishes local packaging, startup, migrated data compatibility and native controls. It does not qualify a Developer ID/notarized distribution, background login-item execution, real sleep/recovery or a real provider/hosted shipping pilot. The local ad-hoc build requires keeping Agetor open during execution.

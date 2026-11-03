@@ -2,7 +2,9 @@
 
 Native sprints add an approved backlog and dependency scheduler to Agetor. Existing pipelines remain useful for reusable agent graphs; a sprint coordinates a selected set of tickets, each with its own worktree, checks and independent review.
 
-This is experimental source in the ZakariyaRguibi fork. Downloading the upstream Agetor release does not include it. The installed app and its data have not been replaced.
+This is experimental source in the ZakariyaRguibi fork. Downloading the upstream Agetor release does not include it. A local installed build includes both pipeline starters and native sprints while retaining existing Agetor data.
+
+For a local installed package, build using `env -u ELECTROBUN_DEVELOPER_ID AGETOR_LOCAL_BUILD=1 bun run build:stable` with system `tmux` on PATH. This produces version `1.1.0-local.1` on the stable data directory, skips maintainer signing/notarization, and disables the upstream update feed. Ad-hoc sign the generated app before installing it. Preserve a backup of the existing app and SQLite database before replacement. The macOS background login-item option requires Developer ID signing and is unavailable in an ad-hoc local build; keep the app open while a sprint runs.
 
 ## Start the development app
 

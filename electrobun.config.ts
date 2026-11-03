@@ -1,10 +1,14 @@
 import type { ElectrobunConfig } from "electrobun";
 
+// Local installations use the normal data directory, without publishing or
+// requiring a maintainer's Apple signing credentials.
+const localBuild = process.env.AGETOR_LOCAL_BUILD === "1";
+
 export default {
   app: {
     name: "Agetor",
     identifier: "sh.alamops.agetor",
-    version: "1.1.0",
+    version: localBuild ? "1.1.0-local.1" : "1.1.0",
     // Registers agetor:// so a clicked AgetorNotifier notification (our
     // bundled helper, native/notifier/ + src/bun/notifier.ts), which opens
     // `agetor://task/<id>`, routes back into this app as an "open-url"
@@ -20,7 +24,7 @@ export default {
     // Resources/version.json, and Updater.checkForUpdate() fetches
     // <baseUrl>/<channel>-macos-arm64-update.json from there. Filenames stay
     // identical across releases so the redirect resolves cleanly each time.
-    baseUrl: "https://github.com/alamops/agetor/releases/latest/download",
+    baseUrl: localBuild ? "" : "https://github.com/alamops/agetor/releases/latest/download",
     // Delta patches carry forward old-hash → new-hash diffs; turning them on
     // means scripts/upload-release.ts must also reupload previous releases'
     // .patch files into the new release (GitHub's "latest" URL only serves
@@ -89,8 +93,8 @@ export default {
     mac: {
       bundleCEF: false,
       icons: "src/assets/agetor.iconset",
-      codesign: true,
-      notarize: true,
+      codesign: !localBuild,
+      notarize: !localBuild,
     },
     linux: { bundleCEF: false, icon: "src/assets/agetor-icon.png" },
     win: { bundleCEF: false, icon: "src/assets/agetor-icon.ico" },
