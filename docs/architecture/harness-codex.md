@@ -30,3 +30,7 @@ The read-only (`ask`) sandbox is never escalated.
 Wherever agetor decides which efforts a model supports (the four pickers, `agetor add`, `createTask`'s default effort, the PATCH null-clear guard, model-change cascades), a model's discovered effort set wins over the curated `MODEL_EFFORT_SUPPORT` table when the CLI reported one; the curated table is only the fallback when discovery is empty.
 The PATCH guard stays null-clear-only and never rejects a non-null effort id, because Codex's own catalog understates what the API accepts (`ultra` ran live on Luna despite not being offered there, and `none` ran live on GPT-5.6 Sol and Luna, GPT-6 Luna and GPT-6.1 Terra although the catalog omits it; GPT-6.1 Sol is the exception that answers `none` with a 400, above) — rejecting on the catalog would block values that actually run.
 A catalog change that only alters efforts (not ids) still republishes `agent_models_changed`.
+
+## Sprint-managed Codex
+
+Managed sprint launches add `model_provider=openai`, `forced_login_method=chatgpt` and `features.multi_agent=false`, and ignore `AGETOR_CODEX_ARGS`. Native preflight requires a ChatGPT login and the approved Sol/Terra route. The independent reviewer uses `ask` (read-only sandbox); implementation retains the existing writable-worktree behavior. See [native sprints](sprints.md).

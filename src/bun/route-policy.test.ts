@@ -195,6 +195,9 @@ describe("route coverage (server.ts ↔ ROUTE_POLICY)", () => {
 // Plan §3 "Desktop-only set" (D9, P7). Keep this list literal: it is the
 // reviewable statement of what the CLI token cannot reach.
 const DESKTOP_ONLY = [
+  "POST /sprints",
+  "PATCH /sprints/:id",
+  "POST /sprints/:id/actions",
   "DELETE /notifications/:taskId",
   "DELETE /terminals/:id",
   "GET /files/preview",

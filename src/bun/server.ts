@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import path from "node:path";
 import type { WebSocketHandler } from "bun";
 import pkg from "../../package.json" with { type: "json" };
+import { getSprint, listSprints, sprintRequest } from "./sprints-api.ts";
 import { API_TOKEN, DEFAULT_API_HOST, formatHostForUrl, getApiPort, nonLoopbackBindWarning } from "./api-config.ts";
 import { removeCoreCreds } from "./core-creds.ts";
 import { applyRoutePolicy, callerOf, desktopOnlyResponse, type ApiCaller } from "./route-policy.ts";
@@ -17,6 +18,8 @@ import { applyDisclaimPreferenceWrite } from "./disclaim-switch.ts";
 import { childEnv } from "./core-spawn.ts";
 import {
   tasks,
+  sprintTaskOwner,
+  sprintTaskOwners,
   backlog,
   drafts,
   runs,
@@ -356,7 +359,14 @@ function withRunningSubagents(t: Task): Task & { runningSubagents: number } {
   // `stalledSince` rides the same decoration: transient in-memory server
   // state (the turn-stall watchdog's mark) that the DB-derived Task can't
   // carry — see stall-registry.ts.
-  return { ...t, runningSubagents, stalledSince: stalledSince(t.id) };
+  return { ...decorateSprintTask(t, sprintTaskOwner(t.id)), runningSubagents, stalledSince: stalledSince(t.id) };
+}
+
+function decorateSprintTask(task: Task, owner: ReturnType<typeof sprintTaskOwner>): Task {
+  if (!owner) return task;
+  const [role, key] = owner.purpose.split(":");
+  const title = role === "integration" ? "Sprint workspace" : role === "root" ? `${key} · Ticket workspace` : role === "job" ? key === "@plan" ? "Sprint specification" : key === "@tickets" ? "Sprint backlog" : key === "@docs" ? "Sprint documentation" : key?.startsWith("@final-review") ? "Sprint final review" : "Sprint verification repair" : `${key} · ${role === "review" ? "Review" : "Build"}`;
+  return { ...task, title, sprintId: owner.sprintId };
 }
 
 // Turn raw path strings into references: keep only existing absolute paths,
@@ -1524,6 +1534,36 @@ export function startApiServer(
       // port (4317 is OTLP gRPC's default, for example) and returns 200 isn't
       // mistaken for a core. Keep this string stable.
       "/health": (req) => json({ ok: true, app: "agetor" }, { headers: corsHeaders(req) }),
+
+      "/sprints": {
+        GET: authed((req) => json(listSprints(), { headers: corsHeaders(req) })),
+        POST: authed(async (req) => {
+          try { return json(await sprintRequest("create", null, await req.json()), { status: 201, headers: corsHeaders(req) }); }
+          catch (error) { return json({ error: String(error instanceof Error ? error.message : error) }, { status: 400, headers: corsHeaders(req) }); }
+        }),
+      },
+      "/sprints/:id": {
+        GET: authed((req) => {
+          try { return json(getSprint(req.params.id), { headers: corsHeaders(req) }); }
+          catch { return json({ error: "Sprint not found" }, { status: 404, headers: corsHeaders(req) }); }
+        }),
+        PATCH: authed(async (req) => {
+          try { return json(await sprintRequest("edit", req.params.id, await req.json()), { headers: corsHeaders(req) }); }
+          catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            return json({ error: message }, { status: message === "Sprint not found" ? 404 : /reload|Pause|Wait|immutable/.test(message) ? 409 : 400, headers: corsHeaders(req) });
+          }
+        }),
+      },
+      "/sprints/:id/actions": {
+        POST: authed(async (req) => {
+          try { return json(await sprintRequest("action", req.params.id, await req.json()), { headers: corsHeaders(req) }); }
+          catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            return json({ error: message }, { status: message === "Sprint not found" ? 404 : 409, headers: corsHeaders(req) });
+          }
+        }),
+      },
 
       "/defaults": {
         GET: authed((req) =>
@@ -5391,9 +5431,10 @@ export function startApiServer(
       "/tasks": {
         GET: authed((req) => {
           const counts = subagents.runningCountsByTask();
+          const owners = sprintTaskOwners();
           return json(
             tasks.list().map((t) => ({
-              ...t,
+              ...decorateSprintTask(t, owners.get(t.id) ?? null),
               // M-S3: the list route ships the trimmed pipelineRun variant
               // (no handoffs, no profile snapshots) — see the field's doc.
               ...(t.pipelineRun ? { pipelineRun: trimPipelineRunForList(t.pipelineRun) } : {}),
@@ -5513,6 +5554,7 @@ export function startApiServer(
             : json({ error: "not found" }, { status: 404, headers: corsHeaders(req) });
         }),
         PATCH: authed(async (req) => {
+          if (sprintTaskOwner(req.params.id)) return json({ error: "Edit sprint requirements and agent settings through the sprint editor" }, { status: 409, headers: corsHeaders(req) });
           // Parse first, then load the row. Every guard below — the archived
           // freeze and the pipeline Done park especially — has to see the
           // task as it is after this await. A Restart (or any status-changing
@@ -5711,6 +5753,7 @@ export function startApiServer(
           // there is no pipeline task left to redirect to, so refusing here
           // would leave the row permanently undeletable (orphan cleanup).
           const existing = tasks.get(req.params.id);
+          if (sprintTaskOwner(req.params.id)) return json({ error: "Sprint worktrees and execution history are managed by the sprint; they cannot be deleted as standalone tasks" }, { status: 409, headers: corsHeaders(req) });
           if (existing && isPipelineStepTask(existing) && !isOrphanedPipelineStep(existing)) {
             return json(
               { error: "step task belongs to a pipeline — act on the pipeline task" },
@@ -7328,6 +7371,7 @@ export function startApiServer(
       // archived freeze already covers everywhere else.
       "/tasks/:id/agent-profile": {
         DELETE: authed((req) => {
+          if (sprintTaskOwner(req.params.id)) return json({ error: "Sprint agent bindings are controlled by the approved batch" }, { status: 409, headers: corsHeaders(req) });
           const task = tasks.get(req.params.id);
           if (!task) {
             return json({ error: "not found" }, { status: 404, headers: corsHeaders(req) });
@@ -7735,6 +7779,8 @@ export function startApiServer(
 
       "/runs/:id/input": {
         POST: authed(async (req) => {
+          const taskId = runs.get(req.params.id)?.taskId;
+          if (taskId && sprintTaskOwner(taskId)) return json({ error: "Change requirements in the sprint editor; answer pending questions through their answer cards" }, { status: 409, headers: corsHeaders(req) });
           const body = (await req.json().catch(() => ({}))) as { line?: string };
           const line = typeof body.line === "string" ? body.line : "";
           if (!line.trim()) {

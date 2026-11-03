@@ -146,6 +146,9 @@ const EXEMPT_OPENCODE_SESSION_IMPORT =
 export const ROUTE_POLICY: Record<string, PolicyEntry> = {
   // Unauthenticated liveness probe; reveals nothing (the CLI's creds probe uses it).
   "/health": PUBLIC,
+  "/sprints": { GET: CLI, POST: APP },
+  "/sprints/:id": { GET: CLI, PATCH: APP },
+  "/sprints/:id/actions": { POST: APP },
 
   // Core info, projects and the git-host adapters (`/github/*` serves GitHub, GitLab
   // and Bitbucket). GETs read `?path=<repo dir>`, POSTs `{ path }` → gated for the CLI

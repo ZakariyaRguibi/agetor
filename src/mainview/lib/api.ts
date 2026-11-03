@@ -1596,6 +1596,10 @@ export const api = {
     return j<{ files: string[]; truncated: boolean }>(`/files/index?${params.toString()}`);
   },
   listTasks: () => j<Task[]>("/tasks"),
+  listSprints: () => j<import("../../shared/sprint.ts").Sprint[]>("/sprints"),
+  createSprint: (input: import("../../shared/sprint.ts").SprintInput) => j<import("../../shared/sprint.ts").Sprint>("/sprints", { method: "POST", body: JSON.stringify(input) }, { retry: false }),
+  editSprint: (id: string, revision: number, input: import("../../shared/sprint.ts").SprintInput) => j<import("../../shared/sprint.ts").Sprint>(`/sprints/${id}`, { method: "PATCH", body: JSON.stringify({ revision, input }) }, { retry: false }),
+  sprintAction: (id: string, revision: number, action: string) => j<import("../../shared/sprint.ts").Sprint>(`/sprints/${id}/actions`, { method: "POST", body: JSON.stringify({ revision, action }) }, { retry: false }),
   /** Single task by id, fresh from the server (bypasses the 2s board poll's
    *  staleness). Used to re-check a task's persisted draft right after the
    *  panel seeds from a possibly-stale polled object — see RunPanel's

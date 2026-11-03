@@ -340,6 +340,10 @@ function TaskCardImpl({ task, homeDir, onStart, onCancel, onDelete, onOpen, onOp
             <Button size="sm" variant="secondary" onClick={() => onOpen(task)}>
               <FolderOpen className="size-3" /> Open
             </Button>
+          ) : task.sprintId ? (
+            <Button size="sm" variant="secondary" onClick={() => onOpen(task)} title="Execution is controlled from Sprints">
+              <FolderOpen className="size-3" /> View sprint task
+            </Button>
           ) : (
             <Button size="sm" onClick={() => onStart(task)}>
               <Play className="size-3" /> Run

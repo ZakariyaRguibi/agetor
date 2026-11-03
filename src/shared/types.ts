@@ -1532,6 +1532,8 @@ export function branchCommitType(
 
 export interface Task {
   id: string;
+  /** Server-derived ownership; editable task bodies cannot set it. */
+  sprintId?: string | null;
   title: string;
   prompt: string;
   column: ColumnId;
@@ -5428,7 +5430,8 @@ export interface SubagentEvent {
  *   send-failed — a message already answered `pending: true` was not
  *                delivered after all (see `SPAWN_RESPONSE_BUDGET_MS`).
  */
-export type GlobalEvent =
+export type GlobalEvent = GlobalEventPayload & { sprintId?: string };
+type GlobalEventPayload =
   | {
       kind: "run-status";
       taskId: string;

@@ -37,6 +37,8 @@ Coding agents are good enough now that the limiting factor is you: one terminal,
 
 ## Features
 
+This fork also includes an experimental **Sprints** workflow: describe a sprint, generate and approve its tickets, then execute dependencies in isolated worktrees with checks, independent review and optional automatic PR/merge. Start with the [native sprint usage guide](docs/sprints.md). This source feature is not included in upstream downloads; see [qualification limits](docs/qa/native-sprints.md).
+
 ### Orchestrate
 
 - **Kanban workflow.** Tasks move through *Backlog → Ready → Running → Blocked → Review → Done* as their runs start, stall, fail or finish. You can drag a card to override the flow at any time.

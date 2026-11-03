@@ -11,6 +11,7 @@ import {
   waitForLaunchesToSettle,
 } from "./orchestrator.ts";
 import { initPipelineRunner, reconcilePipelineRuns } from "./pipeline-runner.ts";
+import { initSprints } from "./sprint-controller.ts";
 import { startLagMonitor, stopLagMonitor } from "./event-loop-lag.ts";
 import { scheduleRetention, stopRetentionTimers } from "./retention.ts";
 import { ensureDisclaimedServer } from "./tmux-resolution.ts";
@@ -353,6 +354,7 @@ export async function runDaemon(): Promise<void> {
     // reconcileOrphans() resolves every step task's own orphan→ready
     // transition. `daemonLog`, not `console.log` — see the rearm comment below.
     const reconciledPipelineRunCount = await reconcilePipelineRuns();
+    await initSprints();
     if (reconciledPipelineRunCount > 0) {
       daemonLog(`reconciled ${reconciledPipelineRunCount} pipeline run(s)`);
     }

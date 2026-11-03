@@ -26,3 +26,7 @@ removes the reason family), `src/bun/notification-hooks.ts` on the global bus (i
 Not deduped: the `Utils.showNotification` fallback (no identifier control).
 The delivered list is scoped per code signature — a dev-built helper can't see release entries — and Developer-ID builds sharing it across releases is unverified.
 Tests: `os-notification.test.ts`, `notifier.test.ts`, `task-notifier.test.ts`, `notification-hooks.test.ts`, `notifications.test.ts`, `toast-slots.test.ts`, `src/cli/notify.test.ts`, `e2e/one-notification-per-task.spec.ts`; `interaction-broadcast-wiring.test.ts` pins from a fresh process that the global `interaction` `resolved` event fires — `orchestrator.ts` installs the interaction bridges exactly once (a second `setResolvedBroadcaster` once replaced the global emit), the setters return the previous fn so a test restores it, and `interactions.ts` `__testing.reset()` leaves the broadcasters installed.
+
+## Sprint notices
+
+Global managed-task events carry derived `sprintId`. App and headless notification handlers suppress routine per-task notices for these events while retaining interaction cards. The native sprint supervisor posts deduplicated blocker, significant-failure and completion notifications through the existing task notifier; `lastNotice` persists across restart. Native helper/signature behavior is unchanged. See [native sprints](sprints.md).

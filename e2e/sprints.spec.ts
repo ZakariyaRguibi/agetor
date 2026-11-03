@@ -1,0 +1,53 @@
+import { test, expect } from "./fixtures";
+import { gotoApp } from "./helpers";
+
+test("native sprint drafts persist and unsaved edits are protected", async ({ page, backend }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await gotoApp(page, backend.bootBase);
+  await page.getByTestId("sprints-button").click();
+  await expect(page.getByRole("heading", { name: "Sprints", exact: true })).toBeVisible();
+  await page.getByRole("textbox", { name: "Sprint name", exact: true }).fill("Living Atlas pilot");
+  await page.getByRole("textbox", { name: "Repository path", exact: true }).fill("/tmp/living-atlas-sprint-fixture");
+  await page.getByRole("textbox", { name: "Product prompt", exact: true }).fill("A deterministic fantasy world simulator");
+  await page.getByRole("textbox", { name: "Sprint specification", exact: true }).fill("# Sprint one\nFoundation, contracts, seeded RNG and saves.");
+  for (const [index, key, title, instructions, acceptance] of [[1, "LA-01", "Foundation", "Build scaffold", "Build succeeds"], [2, "LA-02", "Contracts", "Define contracts", "Types compile"]] as const) {
+    await page.getByRole("button", { name: "Add ticket", exact: true }).click();
+    await page.getByRole("textbox", { name: `Ticket ${index} key`, exact: true }).fill(key);
+    await page.getByRole("textbox", { name: `Ticket ${index} title`, exact: true }).fill(title);
+    await page.getByRole("textbox", { name: `Ticket ${index} instructions`, exact: true }).fill(instructions);
+    await page.getByRole("textbox", { name: `Ticket ${index} acceptance criteria`, exact: true }).fill(acceptance);
+    await page.getByRole("checkbox", { name: `Include ${key} in sprint`, exact: true }).check();
+  }
+  await page.getByRole("textbox", { name: "Ticket 2 prerequisites", exact: true }).fill("LA-01");
+  await page.getByRole("textbox", { name: "Ticket 1 key", exact: true }).fill("LA-BASE");
+  await expect(page.getByRole("textbox", { name: "Ticket 2 prerequisites", exact: true })).toHaveValue("LA-BASE");
+  await expect(page.getByRole("checkbox", { name: "Include LA-BASE in sprint", exact: true })).toBeChecked();
+  await page.getByRole("textbox", { name: "Ticket 1 key", exact: true }).fill("LA-01");
+  await page.getByRole("button", { name: "Add command", exact: true }).click();
+  await page.getByRole("textbox", { name: "Check 1 name", exact: true }).fill("Tests");
+  await page.getByRole("textbox", { name: "Check 1 program", exact: true }).fill("bun");
+  await page.getByRole("textbox", { name: "Check 1 arguments", exact: true }).fill("test");
+  await page.getByRole("checkbox", { name: /Use included subscription capacity only/ }).check();
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Run sprint", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "Create missing sprint agents", exact: true }).click();
+  await expect(page.getByRole("combobox", { name: "reviewer agent", exact: true })).not.toHaveValue("");
+  await page.getByRole("button", { name: "Approve specification", exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: "specification approved" })).toBeVisible();
+  await page.getByRole("button", { name: "Approve batch", exact: true }).click();
+  await page.getByRole("dialog", { name: "Approve this sprint batch?", exact: true }).getByRole("button", { name: "Approve exact batch", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Run sprint", exact: true })).toBeEnabled();
+  await page.getByRole("textbox", { name: "Sprint name", exact: true }).fill("Unsaved revision");
+  await page.getByRole("button", { name: "Pipelines", exact: true }).click();
+  const confirm = page.getByRole("dialog", { name: "Discard unsaved sprint changes?", exact: true });
+  await expect(confirm).toBeVisible();
+  await confirm.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(page.getByRole("textbox", { name: "Sprint name", exact: true })).toHaveValue("Unsaved revision");
+  await page.reload();
+  await page.getByTestId("sprints-button").click();
+  await page.getByRole("button", { name: /Living Atlas pilot.*draft/ }).click();
+  await expect(page.getByRole("textbox", { name: "Sprint name", exact: true })).toHaveValue("Living Atlas pilot");
+  await expect(page.getByRole("textbox", { name: "Ticket 2 key", exact: true })).toHaveValue("LA-02");
+  await expect(page.getByRole("textbox", { name: "Ticket 2 prerequisites", exact: true })).toHaveValue("LA-01");
+  await page.screenshot({ path: test.info().outputPath("sprint-editor.png"), fullPage: true });
+});

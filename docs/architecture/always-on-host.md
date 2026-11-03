@@ -59,3 +59,7 @@ Either way a quit about to be allowed first goes through `quit-launch-gate.ts` (
 **Rollback rule (C21):** a later build that drops this feature MUST keep the helper in the bundle and call `unregister` on launch — otherwise a user who turned the switch on keeps a launchd job whose `BundleProgram` no longer exists and loops on exit 78.
 Turning the switch off is the per-user rollback; there is no feature flag (the switch defaults to off).
 Registration is by bundle id, so a canary and the release share one Login Items row (spike A8): toggling it can leave one label `notFound`, which Settings shows honestly as Off.
+
+## Native sprint supervision
+
+`initSprints` runs after orphan/pipeline reconciliation in the port-owning desktop or headless core. Its short polling timer uses existing native workers and saved SQLite state; no second supervisor service or sleep inhibitor is installed. A packaged always-on host can therefore continue approved sprints using the existing background option. Explicitly paused sprints remain paused. Command identity recovery blocks uncertain launches rather than duplicating them. The background handover of a packaged sprint build remains to be qualified. See [native sprints](sprints.md).

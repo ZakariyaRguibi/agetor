@@ -156,6 +156,7 @@ export function headlessNotificationFor(
   ctx: HeadlessNotificationContext = {},
 ): TaskNotification | null {
   if (ev.kind === "update" || ev.kind === "send-failed" || ev.kind === "fx-auto-resume") return null;
+  if (ev.sprintId && ev.kind !== "interaction") return null;
 
   const stepParentId = stepParentIdOf(ev);
 
