@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { db, agentProfiles, harnesses } from "./db.ts";
-import { initialTicketState, validateSprintInput, type Sprint, type SprintInput } from "../shared/sprint.ts";
+import { initialTicketState, sprintApprovalIssues, SPRINT_DRAFT_JOBS, validateSprintInput, type Sprint, type SprintInput } from "../shared/sprint.ts";
 
 export function sprintSpecHash(input: SprintInput): string {
   return createHash("sha256").update(JSON.stringify([input.workdir, input.prompt, input.specification])).digest("hex");
@@ -65,9 +65,23 @@ export function editSprint(id: string, revision: number, raw: unknown): Sprint {
       sprint.batchApproval = null;
       // Keep the attempt ledger, but require new code verification/review after a revision.
       const keys = new Set([...Object.keys(sprint.state), ...input.tickets.map((ticket) => ticket.key)]);
-      sprint.state = Object.fromEntries([...keys].map((key) => [key, { ...initialTicketState(), repairs: sprint.state[key]?.repairs ?? 0, attempts: (sprint.state[key]?.attempts ?? 0) + (key.startsWith("@") ? 1 : 0), quotaFailures: sprint.state[key]?.quotaFailures ?? 0 }]));
+      sprint.state = Object.fromEntries([...keys].map((key) => {
+        const previous = sprint.state[key];
+        if (previous && (key === "@plan" || key === "@tickets")) return [key, previous];
+        return [key, { ...initialTicketState(), repairs: previous?.repairs ?? 0, attempts: (previous?.attempts ?? 0) + (key.startsWith("@") ? 1 : 0), quotaFailures: previous?.quotaFailures ?? 0 }];
+      }));
       sprint.releasePollAt = 0;
       sprint.status = "draft";
+    }
+    // `queued` is runnable for generation jobs. A save must never create
+    // or resume that authorization, even when editing a paused draft.
+    for (const key of SPRINT_DRAFT_JOBS) {
+      const job = sprint.state[key];
+      if (job?.status === "queued") Object.assign(job, { status: "failed", retryAt: null, startedAt: null, error: "Generation stopped when the draft was saved. Use Generate to request it again." });
+    }
+    if (!sprint.integrationTaskId && ["paused", "needs_attention"].includes(sprint.status)) {
+      sprint.status = "draft";
+      sprint.error = null;
     }
   });
 }
@@ -75,18 +89,21 @@ export function editSprint(id: string, revision: number, raw: unknown): Sprint {
 export function approveSprintSpec(id: string, revision: number): Sprint {
   return updateSprint(id, revision, (sprint) => {
     if (sprint.status !== "draft" || !sprint.input.specification.trim()) throw new Error("A draft specification is required");
+    assertNoPendingGeneration(sprint);
     sprint.specApproval = sprintSpecHash(sprint.input);
   });
 }
 
 export function approveSprintBatch(id: string, revision: number): Sprint {
   return updateSprint(id, revision, (sprint) => {
-    if (sprint.status !== "draft" || sprint.specApproval !== sprintSpecHash(sprint.input)) throw new Error("Approve the current specification first");
-    if (!sprint.input.selected.length || !sprint.input.checks.length || !sprint.input.includedOnly) throw new Error("Select tickets, configure checks and confirm included capacity only");
-    for (const id of Object.values(sprint.input.profiles).filter(Boolean) as string[]) if (!agentProfiles.get(id)) throw new Error(`Agent profile not found: ${id}`);
-    const p = sprint.input.profiles;
-    if (!p.implementer || !p.reviewer || p.implementer === p.reviewer) throw new Error("Choose implementation and independent review profiles");
-    if (sprint.input.shipping.enabled && (!sprint.input.shipping.repository || !sprint.input.shipping.requiredChecks.length)) throw new Error("Shipping requires a repository and named CI checks");
+    if (sprint.status !== "draft") throw new Error("Save the sprint as a draft before approving a batch");
+    assertNoPendingGeneration(sprint);
+    const issues = sprintApprovalIssues(sprint.input, sprint.specApproval === sprintSpecHash(sprint.input), (id) => !!agentProfiles.get(id));
+    if (issues.length) throw new Error(issues.join(" "));
     sprint.batchApproval = sprintBatchHash(sprint.input);
   });
+}
+
+function assertNoPendingGeneration(sprint: Sprint): void {
+  if (SPRINT_DRAFT_JOBS.some((key) => ["queued", "implementing"].includes(sprint.state[key]?.status ?? ""))) throw new Error("Wait for specification or ticket generation to finish before approving");
 }

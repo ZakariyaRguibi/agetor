@@ -63,20 +63,24 @@ export async function assertSprintBilling(sprint: Sprint, profileId: string, rol
   throw new Error(`Unsupported subscription route for ${harness.kind}`);
 }
 
-export async function startSprintTask(sprint: Sprint, task: Task, profileId: string, role: string): Promise<string> {
+export async function startSprintTask(sprint: Sprint, task: Task, profileId: string, role: string, mayStart: (current: Sprint) => boolean = (current) => current.status === "running" && !!current.batchApproval): Promise<string> {
   if (isTaskRunLive(task.id)) return task.id;
   const latest = runs.listForTask(task.id)[0];
   // Reconciliation observes an already finished execution rather than duplicating it.
   if (latest && latest.status !== "orphaned") return task.id;
-  const current = getSprint(sprint.id);
-  if (current.status === "paused") throw new Error("Sprint paused");
-  if (current.batchApproval && current.batchApproval !== sprintBatchHash(current.input)) throw new Error("Approval changed before model launch");
+  const authorize = () => {
+    const current = getSprint(sprint.id);
+    if (current.status === "paused") throw new Error("Sprint paused");
+    if (!mayStart(current) || (current.batchApproval && current.batchApproval !== sprintBatchHash(current.input))) throw new Error("Approval changed before model launch");
+    return current;
+  };
+  const current = authorize();
   if (launching.has(task.id) || activeRunCount() + launching.size >= 3) throw new Error("Agent capacity unavailable; retry later");
   assertSprintWorkspaceIdle(taskCwd(task), task.id);
   launching.set(task.id, taskCwd(task));
   try {
   await assertSprintBilling(current, profileId, role);
-  if (getSprint(sprint.id).status === "paused") throw new Error("Sprint paused");
+  authorize();
   if (activeRunCount() >= 3) throw new Error("Agent capacity unavailable; retry later");
   assertSprintWorkspaceIdle(taskCwd(task), task.id);
   const result = await startTask(task.id, "sprint");

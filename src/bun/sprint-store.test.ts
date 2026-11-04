@@ -43,3 +43,32 @@ test("revised batches preserve retired ticket budgets and advance job identities
   sprint = editSprint(sprint.id, sprint.revision, original);
   expect(sprint.state["LA-08"]!.repairs).toBe(3);
 });
+
+test("saving delivery settings retains completed generation and specification approval", () => {
+  let sprint = createSprint(sprintFixture());
+  sprint = approveSprintSpec(sprint.id, sprint.revision);
+  sprint = updateSprint(sprint.id, sprint.revision, (value) => {
+    value.state["@plan"] = { ...initialTicketState(), status: "passed", attempts: 1, taskId: "finished-plan" };
+    value.state["@tickets"] = { ...initialTicketState(), status: "passed", attempts: 1, taskId: "finished-tickets" };
+  });
+  const input = structuredClone(sprint.input); input.shipping.enabled = false;
+  const saved = editSprint(sprint.id, sprint.revision, input);
+  expect(saved.specApproval).toBe(sprint.specApproval);
+  expect(saved.state["@plan"]).toEqual(sprint.state["@plan"]!);
+  expect(saved.state["@tickets"]).toEqual(sprint.state["@tickets"]!);
+});
+
+test("saving a paused pre-run draft cancels pending generation without resetting its ledger", () => {
+  let sprint = createSprint(sprintFixture());
+  sprint = updateSprint(sprint.id, sprint.revision, (value) => {
+    value.status = "paused";
+    value.state["@tickets"] = { ...initialTicketState(), status: "queued", attempts: 4, repairs: 2, retryAt: Date.now() + 1000 };
+  });
+  const saved = editSprint(sprint.id, sprint.revision, sprint.input);
+  expect(saved.status).toBe("draft");
+  expect(saved.state["@tickets"]!.status).toBe("failed");
+  expect(saved.state["@tickets"]!.retryAt).toBeNull();
+  expect(saved.state["@tickets"]!.attempts).toBe(4);
+  expect(saved.state["@tickets"]!.repairs).toBe(2);
+  expect(() => approveSprintSpec(saved.id, saved.revision)).not.toThrow();
+});

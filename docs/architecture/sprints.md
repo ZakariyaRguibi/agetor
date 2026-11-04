@@ -10,6 +10,8 @@ All mutations require the desktop master token. `POST /sprints` takes `SprintInp
 
 The authoritative payload types/validation live in `src/shared/sprint.ts`. Specifications and selected prerequisite-closed ticket batches have separate approvals. Loading a draft does not execute work or publish code. Subscription-only confirmation and explicit required CI names are required for executable batch approval.
 
+Saving a draft never requests planning or ticket generation. Completed generation records remain complete. An edit cancels a queued generation request and keeps its attempt ledger. Saving a paused sprint that has not started implementation returns it to draft for explicit approvals. Ticket generation requires approval of the current specification both when requested and when its result is imported.
+
 ## Execution and ownership
 
 `sprint-controller.ts` starts a three-second supervisor only in the core that owns the API port, after native orphan and pipeline reconciliation. It uses existing native tasks/profiles/events/worktrees. It does not create another daemon or bypass the app's boot ownership. `sprint-runner.ts` schedules prerequisites, polls native workers, checks code directly, requires independent review and integrates passing candidates. Each ticket has an isolated root worktree; separate execution/review tasks share only that ticket's workspace. Existing reviewed prerequisite commits are merged into a clean reused root before its next implementation. Conflicts or uncommitted work needing new prerequisites stop for resolution.

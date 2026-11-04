@@ -2525,6 +2525,7 @@ const runTaskMenuAction = useCallback((action: TaskMenuAction, snapshot: Task) =
         </div>
       </header>
       <div className="flex min-h-0 flex-1">
+        <div className={view.kind === "sprints" ? "hidden" : "contents"}>
         <NewTaskForm
           agents={agents}
           harnesses={harnesses}
@@ -2570,6 +2571,7 @@ const runTaskMenuAction = useCallback((action: TaskMenuAction, snapshot: Task) =
             }
           }}
         />
+        </div>
         <main className="flex min-w-0 flex-1 flex-col">
           {/* Chrome that stays mounted regardless of `view` (D5,
               docs/plans/pipelines.md): update/tmux banners and the global

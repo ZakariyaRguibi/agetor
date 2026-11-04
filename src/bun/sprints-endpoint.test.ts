@@ -55,3 +55,31 @@ test("sprint profile setup is idempotent and managed workers cannot be started o
   expect((await call(`/tasks/${created.task.id}`, master, "DELETE")).status).toBe(409);
   expect((await call(`/tasks/${created.task.id}/agent-profile`, cli, "DELETE")).status).toBe(409);
 });
+
+test("batch approval reports missing delivery settings and succeeds after saving a local delivery", async () => {
+  const input = sprintFixture();
+  input.shipping.requiredChecks = [];
+  let response = await call("/sprints", master, "POST", input);
+  let sprint = await response.json() as import("../shared/sprint.ts").Sprint;
+  const action = async (name: string) => call("/sprints/" + sprint.id + "/actions", master, "POST", { revision: sprint.revision, action: name });
+  response = await action("setup-agents");
+  expect(response.status).toBe(200);
+  sprint = await response.json() as typeof sprint;
+  response = await action("approve-spec");
+  expect(response.status).toBe(200);
+  sprint = await response.json() as typeof sprint;
+  const specApproval = sprint.specApproval;
+  response = await action("approve-batch");
+  expect(response.status).toBe(409);
+  expect((await response.json() as { error: string }).error).toContain("exact required CI check names");
+  response = await call("/sprints/" + sprint.id, master, "PATCH", { revision: sprint.revision, input: { ...sprint.input, shipping: { ...sprint.input.shipping, enabled: false } } });
+  expect(response.status).toBe(200);
+  sprint = await response.json() as typeof sprint;
+  expect(sprint.specApproval).toBe(specApproval);
+  response = await action("approve-batch");
+  expect(response.status).toBe(200);
+  sprint = await response.json() as typeof sprint;
+  expect(sprint.batchApproval).toBeTruthy();
+  expect(sprint.status).toBe("draft");
+  expect(sprint.integrationTaskId).toBeNull();
+});

@@ -57,6 +57,20 @@ export interface Sprint {
   releasePollAt?: number;
 }
 export const SPRINT_LIMITS = { agents: 3, attemptMs: 20 * 60_000, repairs: 3, tickets: 100 } as const;
+export const SPRINT_DRAFT_JOBS = ["@plan", "@tickets"] as const;
+
+/** Shared readiness messages; the core additionally verifies the approval hash. */
+export function sprintApprovalIssues(input: SprintInput, specificationApproved: boolean, profileExists: (id: string) => boolean): string[] {
+  const issues: string[] = [];
+  if (!specificationApproved) issues.push("Approve the current specification first.");
+  if (!input.selected.length) issues.push("Select at least one ticket.");
+  if (!input.checks.length) issues.push("Add a verification command.");
+  if (!input.includedOnly) issues.push("Confirm included subscription capacity in the brief.");
+  if (!input.profiles.implementer || !input.profiles.reviewer || input.profiles.implementer === input.profiles.reviewer) issues.push("Choose a builder and a separate reviewer.");
+  if (Object.values(input.profiles).some((id) => id && !profileExists(id))) issues.push("Replace any missing agent profiles in the brief.");
+  if (input.shipping.enabled && (!input.shipping.repository || !input.shipping.requiredChecks.length)) issues.push("Enter the GitHub repository and exact required CI check names.");
+  return issues;
+}
 
 function text(value: unknown, field: string, max = 100_000, empty = false): string {
   if (typeof value !== "string" || value.length > max || (!empty && !value.trim()) || value.includes("\0")) throw new Error(`Invalid ${field}`);

@@ -1,7 +1,6 @@
-import { initialTicketState, validateSprintInput, preserveSprintBacklog, type Sprint } from "../shared/sprint.ts";
-import { quotaResetAt } from "../shared/sprint-result.ts";
+import { initialTicketState, validateSprintInput, preserveSprintBacklog, SPRINT_DRAFT_JOBS, type Sprint } from "../shared/sprint.ts";
 import { createTaskNotifier, type TaskNotification } from "./task-notifier.ts";
-import { getSprint, listSprints, updateSprint } from "./sprint-store.ts";
+import { getSprint, listSprints, sprintSpecHash, updateSprint } from "./sprint-store.ts";
 import { nativeSprintHost } from "./sprint-native.ts";
 import { SprintRunner } from "./sprint-runner.ts";
 import { finishSprint } from "./sprint-release.ts";
@@ -35,22 +34,24 @@ function armDeadlines(sprint: Sprint) {
   }
 }
 
-async function tickDraft(sprint: Sprint): Promise<void> {
+export async function tickDraft(sprint: Sprint, runJob = sprintJob): Promise<void> {
   if (jobs.has(sprint.id)) return;
-  const key = ["@plan", "@tickets"].find((name) => sprint.state[name]?.status === "implementing" || sprint.state[name]?.status === "queued");
+  const key = SPRINT_DRAFT_JOBS.find((name) => sprint.state[name]?.status === "implementing" || sprint.state[name]?.status === "queued");
   if (!key || sprint.status !== "draft") return;
   const state = sprint.state[key]!;
+  const isCurrent = (value: Sprint) => value.status === "draft" && value.state[key]?.attempts === state.attempts && ["implementing", "queued"].includes(value.state[key]?.status ?? "");
   if (state.retryAt && state.retryAt > Date.now() || activeRunCount() >= 3) return;
   jobs.add(sprint.id);
   try {
     const planning = key === "@plan", profileId = planning ? sprint.input.profiles.planner : sprint.input.profiles.tickets;
+    if (!planning && sprint.specApproval !== sprintSpecHash(sprint.input)) throw new Error("Approve the current specification before generating tickets");
     const prompt = planning
       ? `Develop a sprint specification and architecture for the following product prompt. Inspect the repository but do not implement, publish or delegate. Explain acceptance criteria, scope boundaries, important decisions, risks and verification. Return exactly one <sprint-result>{"specification":"complete Markdown specification"}</sprint-result>. If a consequential decision requires the user, include it clearly as an open question.\nProduct prompt:\n${sprint.input.prompt}\nExisting specification:\n${sprint.input.specification}`
-      : `Convert the approved specification into detailed, independently executable backlog tickets. Preserve existing ticket keys and planning context. Include acceptance criteria, implementation boundaries, verification and explicit dependencies. Propose repository-appropriate install, test, lint, type-check, build and smoke commands, with browser checks for UI changes. Commands are argv arrays without shell expansion. Do not implement, start tasks, publish or delegate. Return exactly one <sprint-result>{"tickets":[{"key":"stable identifier","title":"title","prompt":"self-contained detailed instructions","acceptance":["testable criterion"],"dependencies":[]}],"checks":[{"name":"Tests","argv":["program","argument"]}]}</sprint-result>.\nApproved specification:\n${sprint.input.specification}\nExisting tickets:\n${JSON.stringify(sprint.input.tickets)}`;
-    const result = await sprintJob(sprint, key, profileId, sprint.input.workdir, prompt, planning ? "plan" : "tickets");
+      : `Convert the approved specification into detailed, independently executable backlog tickets. Preserve existing ticket keys and planning context. Include acceptance criteria, implementation boundaries, verification and explicit dependencies. Propose repository-appropriate install, test, lint, type-check, build and smoke commands, with browser checks for UI changes. Commands are argv arrays without shell expansion. Every proposed command must run locally in an isolated worktree on the current host; keep Linux CI provisioning and machine-wide package-manager changes out of this list. Do not implement, start tasks, publish or delegate. Return exactly one <sprint-result>{"tickets":[{"key":"stable identifier","title":"title","prompt":"self-contained detailed instructions","acceptance":["testable criterion"],"dependencies":[]}],"checks":[{"name":"Tests","argv":["program","argument"]}]}</sprint-result>.\nApproved specification:\n${sprint.input.specification}\nExisting tickets:\n${JSON.stringify(sprint.input.tickets)}`;
+    const result = await runJob(sprint, key, profileId, sprint.input.workdir, prompt, planning ? "plan" : "tickets");
     if (!result) return;
     const current = getSprint(sprint.id);
-    if (current.status === "paused") return;
+    if (!isCurrent(current) || (!planning && current.specApproval !== sprintSpecHash(current.input))) return;
     const input = validateSprintInput({ ...current.input, ...(planning ? { specification: result.result?.specification } : { tickets: preserveSprintBacklog(current.input.tickets, result.result?.tickets), checks: current.input.checks.length ? current.input.checks : result.result?.checks ?? [] }) });
     updateSprint(current.id, current.revision, (value) => {
       value.input = input; value.batchApproval = null; value.status = "draft"; value.error = null;
@@ -60,12 +61,11 @@ async function tickDraft(sprint: Sprint): Promise<void> {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error), current = getSprint(sprint.id);
-    if (current.status === "paused") return;
+    if (!isCurrent(current)) return;
     updateSprint(current.id, current.revision, (value) => {
-      const state = value.state[key]!, retry = quotaResetAt(message, Date.now(), state.repairs);
+      const state = value.state[key]!;
       state.error = message; value.error = message;
-      if (retry) { state.status = "queued"; state.retryAt = retry; state.taskId = null; state.attempts += 1; state.startedAt = null; }
-      else { state.status = "failed"; value.status = "needs_attention"; }
+      state.status = "failed"; state.retryAt = null; value.status = "needs_attention";
     });
     host.notify(getSprint(sprint.id), message);
   } finally { jobs.delete(sprint.id); }
@@ -97,12 +97,12 @@ export async function sprintControl(id: string, revision: number, action: string
   if (action === "resume") return sprintRunner.resume(id, revision);
   if (action === "plan" || action === "tickets") return updateSprint(id, revision, (value) => {
     if (value.status !== "draft") throw new Error("Planning requires a draft sprint");
-    if (Object.values(value.state).some((state) => ["implementing", "reviewing", "checking"].includes(state.status))) throw new Error("A sprint job is already active");
+    if (Object.values(value.state).some((state) => ["implementing", "reviewing", "checking"].includes(state.status)) || SPRINT_DRAFT_JOBS.some((key) => value.state[key]?.status === "queued")) throw new Error("A sprint job is already active or waiting to retry");
     const key = action === "plan" ? "@plan" : "@tickets";
     if (!(action === "plan" ? value.input.profiles.planner : value.input.profiles.tickets)) throw new Error("Choose the planning/ticket agent first");
     if (!value.input.includedOnly) throw new Error("Confirm included subscription capacity only");
-    if (action === "tickets" && !value.specApproval) throw new Error("Approve the specification before generating tickets");
-    const old = value.state[key]; value.state[key] = { ...initialTicketState(), attempts: (old?.attempts ?? 0) + 1, repairs: old?.repairs ?? 0, status: "implementing", startedAt: Date.now() };
+    if (action === "tickets" && value.specApproval !== sprintSpecHash(value.input)) throw new Error("Approve the current specification before generating tickets");
+    const old = value.state[key]; value.state[key] = { ...initialTicketState(), attempts: (old?.attempts ?? 0) + 1, repairs: old?.repairs ?? 0, quotaFailures: old?.quotaFailures ?? 0, status: "implementing", startedAt: Date.now() };
     value.batchApproval = null; value.error = null;
   });
   throw new Error("Unsupported sprint action");

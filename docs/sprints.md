@@ -4,7 +4,7 @@ Native sprints add an approved backlog and dependency scheduler to Agetor. Exist
 
 This is experimental source in the ZakariyaRguibi fork. Downloading the upstream Agetor release does not include it. A local installed build includes both pipeline starters and native sprints while retaining existing Agetor data.
 
-For a local installed package, build using `env -u ELECTROBUN_DEVELOPER_ID AGETOR_LOCAL_BUILD=1 bun run build:stable` with system `tmux` on PATH. This produces version `1.1.0-local.1` on the stable data directory, skips maintainer signing/notarization, and disables the upstream update feed. Ad-hoc sign the generated app before installing it. Preserve a backup of the existing app and SQLite database before replacement. The macOS background login-item option requires Developer ID signing and is unavailable in an ad-hoc local build; keep the app open while a sprint runs.
+For a local installed package, build using `env -u ELECTROBUN_DEVELOPER_ID AGETOR_LOCAL_BUILD=1 bun run build:stable` with system `tmux` on PATH. This produces version `1.1.0-local.2` on the stable data directory, skips maintainer signing/notarization, and disables the upstream update feed. Ad-hoc sign the generated app before installing it. Preserve a backup of the existing app and SQLite database before replacement. The macOS background login-item option requires Developer ID signing and is unavailable in an ad-hoc local build; keep the app open while a sprint runs.
 
 ## Start the development app
 
@@ -29,20 +29,20 @@ Keep the app running while trying the workflow. A packaged build can use the exi
 
 ## Describe, review, approve, run
 
-1. Open **Sprints** in Agetor's top bar. Enter a name, the absolute repository path and your product/sprint prompt. Save the draft.
-2. Click **Create missing sprint agents**. This creates five profiles for this draft and preserves existing selections: Sonnet planner, Sol ticket writer, OpenCode Go DeepSeek builder, Sol reviewer and Terra escalation. It makes no model request. Check the actual OpenCode Go model ID offered by your account; edit/select the builder profile if the default is unavailable. Profile changes require a fresh batch approval.
-3. Confirm **Use included subscription capacity only**. Click **Generate specification**. Read the returned Markdown, resolve its open questions and edit it as needed. Save and **Approve specification**. You can also paste a specification instead of generating one.
-4. Click **Generate tickets**. Review every ticket's identifier, instructions, acceptance criteria and prerequisites. Existing identifiers such as `LA-01` must remain stable. You can add/edit cards or import advanced JSON.
-5. Check **Include … in sprint** for only the approved batch. Include all prerequisites too. For the pilot, select `LA-01 → LA-02 → (LA-03, LA-08)` and leave other tickets unchecked in the backlog.
-6. Review verification commands. Each command has a program and one argument per line. For example, program `pnpm`, arguments `-r` and `test` on separate lines. There is no implicit shell: `&&`, `$VAR` and glob expansion are literal arguments. Include installation/setup where fresh worktrees need dependencies, tests, lint, type checks, builds and a whole-sprint smoke test. UI changes require an approved browser/e2e check. Commands run directly without a model.
-7. Configure shipping as described below. Save, click **Approve batch**, and read the concrete confirmation. Approval binds the exact specification, tickets, selection, commands, profiles, harness routes and shipping settings.
-8. Click **Run sprint**. Monitor the sprint's ticket statuses, check evidence and errors. Native task transcripts remain visible on the board. Moving a card to Done does not satisfy sprint verification.
+Open **Sprints** in the top bar. The app reopens your last saved sprint, and **New sprint** opens a blank draft. Use the four steps across the top:
 
-Generation uses subscription capacity. Merely creating profiles, saving or approving a draft does not run an agent. The builder does not create or approve its own backlog.
+1. **Brief:** enter a name, absolute repository path and product prompt. Confirm **Use included subscription capacity only**, then click **Generate specification**. This saves the brief and creates missing default profiles if necessary: Sonnet planner, Sol ticket writer, Go DeepSeek builder, Sol reviewer and Terra escalation. Expand **Agent settings** to customize the profiles or create them without running a model. Use **Review or write specification** to paste a spec manually.
+2. **Specification:** review the Markdown and resolve open questions. **Edit specification** opens the editable text; **Approve specification** saves it and takes you to Tickets.
+3. **Tickets:** click **Generate tickets** if the backlog is empty. Expand individual tickets to review instructions, acceptance criteria and dependencies. Select only the intended batch; selecting a ticket includes its prerequisites. Expand **Verification commands** to check or edit the commands. For the original foundation pilot, select LA-01, LA-02, LA-03 and LA-08 only if those items are still outstanding. Use **Review batch** to save the draft and proceed.
+4. **Review & run:** review the selected titles and delivery choice. Use the visible **Before approval** list to resolve missing settings. Choose a local branch or GitHub PR/merge. Click **Approve batch**, read the concrete confirmation, then **Run sprint** when ready. The same screen displays progress and expandable execution evidence.
+
+**Save draft** never starts or regenerates anything. It preserves completed planning and the current specification approval unless the brief/spec changes. A pre-run draft paused during generation can be saved and approved again without starting a model. Use an explicit **Generate** button only when you want a new generation pass. Batch approval records permission; **Run sprint** starts implementation.
+
+Commands are direct argv arrays. Enter one argument per line; shell operators and glob expansion are literal. Include worktree setup, tests, lint, type checks, builds and smoke checks as appropriate. Keep Linux provisioning and machine-wide configuration out of the local checks. UI changes require an approved browser/e2e check.
 
 ## Enable automatic shipping
 
-Automatic shipping is off in a new draft for local trials. To enable it, supply `owner/repository`, base `main`, the exact required hosted CI check names, and check the shipping option before batch approval. The final confirmation includes commit, push, one PR and automatic squash merge after successful verification.
+Automatic shipping is off in a new draft for local trials. To enable it, supply `owner/repository`, base `main`, the exact required hosted CI check names, and select **Open one GitHub PR and merge after green CI** before batch approval. The final confirmation includes commit, push, one PR and automatic squash merge after successful verification.
 
 The repository must have a matching GitHub `origin`, authenticated `gh` access, squash merging enabled, and **classic branch protection** requiring up-to-date checks with **administrator enforcement**. The GitHub account must be able to read that protection. Agetor checks this before starting implementation and again before merging; it does not alter repository rules. Rulesets-only protection and repositories without this policy are currently unsupported for automatic shipping. Disable shipping to try local execution instead.
 

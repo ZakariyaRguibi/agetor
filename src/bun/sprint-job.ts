@@ -1,6 +1,6 @@
 import { createTask, cancelLiveRunOfTask } from "./orchestrator.ts";
 import { tasks, runs, bindSprintTask } from "./db.ts";
-import { getSprint, updateSprint } from "./sprint-store.ts";
+import { getSprint, sprintSpecHash, updateSprint } from "./sprint-store.ts";
 import { nativeSprintPoll, startSprintTask } from "./sprint-native.ts";
 import { initialTicketState, SPRINT_LIMITS, type Sprint } from "../shared/sprint.ts";
 import { quotaResetAt } from "../shared/sprint-result.ts";
@@ -23,6 +23,12 @@ export async function sprintJob(sprint: Sprint, key: string, profileId: string, 
     state = current.state[key]!;
   }
   if (state.retryAt && state.retryAt > Date.now()) return null;
+  const attempt = state.attempts;
+  const generation = role === "plan" || role === "tickets";
+  const mayStart = (value: Sprint) => value.state[key]?.attempts === attempt && (generation
+    ? value.status === "draft" && ["queued", "implementing"].includes(value.state[key]?.status ?? "") && (role !== "tickets" || value.specApproval === sprintSpecHash(value.input))
+    : ["verifying", "shipping"].includes(value.status) && !!value.batchApproval);
+  if (!mayStart(current)) return null;
   const fallbackProfile = state.repairs > 0 ? fallbackFor(current, role) : null;
   const effectiveProfile = fallbackProfile || profileId;
   const title = `[sprint:${sprint.id}:job:${key}:${state.attempts}]`;
@@ -31,7 +37,9 @@ export async function sprintJob(sprint: Sprint, key: string, profileId: string, 
     const result = await createTask({ title, prompt: `${prompt}\nPrevious job failure: ${state.error ?? "none"}\nIf scope or architecture must change, stop and return one <sprint-result>{"requiresApproval":true,"reason":"decision required"}</sprint-result>.`, agentProfileId: effectiveProfile, workdir: cwd, isolation: role === "plan" || role === "tickets" ? "worktree" : "none" });
     if ("error" in result) throw new Error(result.error);
     task = result.task;
+    bindSprintTask(task.id, sprint.id, `job:${key}`);
     current = getSprint(sprint.id);
+    if (!mayStart(current)) return null;
     updateSprint(current.id, current.revision, (value) => { value.state[key]!.taskId = task!.id; });
   }
   if (runs.countForTask(task.id) === 0) {
@@ -40,7 +48,7 @@ export async function sprintJob(sprint: Sprint, key: string, profileId: string, 
   }
   bindSprintTask(task.id, sprint.id, `job:${key}`);
   try {
-  await startSprintTask(getSprint(sprint.id), task, effectiveProfile, role);
+  await startSprintTask(getSprint(sprint.id), task, effectiveProfile, role, mayStart);
   const result = await nativeSprintPoll(task.id);
   if (result.status === "running") {
     if (state.startedAt && Date.now() - state.startedAt > SPRINT_LIMITS.attemptMs) { await cancelLiveRunOfTask(task.id); throw new Error("20 minute model job timeout"); }
@@ -52,6 +60,8 @@ export async function sprintJob(sprint: Sprint, key: string, profileId: string, 
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (message.startsWith("Agent capacity unavailable")) return null;
+    if (message.startsWith("SPRINT_BLOCKER:")) throw error;
+    if (!mayStart(getSprint(sprint.id))) return null;
     const retry = quotaResetAt(message, Date.now(), state.quotaFailures);
     if (!retry) throw error;
     current = getSprint(sprint.id);

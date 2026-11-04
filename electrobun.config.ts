@@ -8,7 +8,7 @@ export default {
   app: {
     name: "Agetor",
     identifier: "sh.alamops.agetor",
-    version: localBuild ? "1.1.0-local.1" : "1.1.0",
+    version: localBuild ? "1.1.0-local.2" : "1.1.0",
     // Registers agetor:// so a clicked AgetorNotifier notification (our
     // bundled helper, native/notifier/ + src/bun/notifier.ts), which opens
     // `agetor://task/<id>`, routes back into this app as an "open-url"

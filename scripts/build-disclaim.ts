@@ -31,6 +31,7 @@
 import { existsSync, statSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const SRC = path.join(REPO_ROOT, "native", "disclaim", "disclaim.c");
@@ -84,7 +85,7 @@ async function main() {
   // build script itself, and it was signed with the identity we'd use now.
   if (existsSync(EXE) && existsSync(STAMP)) {
     const exeMtime = statSync(EXE).mtimeMs;
-    const selfPath = new URL(import.meta.url).pathname;
+    const selfPath = fileURLToPath(import.meta.url);
     const newestSource = Math.max(statSync(SRC).mtimeMs, statSync(selfPath).mtimeMs);
     const stamp = (await readFile(STAMP, "utf8")).trim();
     if (exeMtime >= newestSource && stamp === desiredIdentity) {
