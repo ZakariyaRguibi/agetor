@@ -52,6 +52,16 @@ mkdirSync(DATA_DIR, { recursive: true });
 
 export const dataDir = DATA_DIR;
 
+export function sprintTaskOwner(taskId: string): { sprintId: string; purpose: string } | null {
+  return db.query<{ sprintId: string; purpose: string }, [string]>("SELECT sprint_id AS sprintId, purpose FROM sprint_tasks WHERE task_id = ?").get(taskId);
+}
+export function bindSprintTask(taskId: string, sprintId: string, purpose: string): void {
+  db.run("INSERT OR IGNORE INTO sprint_tasks (task_id, sprint_id, purpose) VALUES (?, ?, ?)", [taskId, sprintId, purpose]);
+}
+export function sprintTaskOwners(): Map<string, { sprintId: string; purpose: string }> {
+  return new Map(db.query<{ taskId: string; sprintId: string; purpose: string }, []>("SELECT task_id AS taskId, sprint_id AS sprintId, purpose FROM sprint_tasks").all().map((row) => [row.taskId, { sprintId: row.sprintId, purpose: row.purpose }]));
+}
+
 /** Pidfile path. Written at boot by `index.ts`, read by `wipe-dev.ts` for
  *  liveness checks. Single source of truth so a future rename doesn't
  *  leave silent stragglers. */

@@ -18,7 +18,7 @@ import {
 import { spawnCodexViaTmux } from "./codex-tmux.ts";
 import { createCursorMapCtx, flushCursorThinking, mapCursorEvent } from "./cursor-tmux.ts";
 import { FAKE_CURSOR_ASK_PROMPT_MARKER, spawnCursorViaAcp, spawnFakeCursorAsk } from "./cursor-acp.ts";
-import { dataDir, subagents as subagentsDb, tasks } from "./db.ts";
+import { dataDir, subagents as subagentsDb, tasks, sprintTaskOwner } from "./db.ts";
 import { FX_STEER_DROPPED_STATUS, fxRefusedStatusLine, fxSpeedNotOfferedLine, mapFxUpdate, spawnFxViaAcp, type FxLaunchOptions, type FxMode, type FxUpdateCtx } from "./fx-acp.ts";
 import { spawnGeminiViaTmux } from "./gemini-tmux.ts";
 import { spawnAntigravityViaTmux } from "./antigravity-tmux.ts";
@@ -118,6 +118,8 @@ export const CLAUDE_PROMPT_ARGV_MAX_BYTES = 4096;
 export { GEMINI_PROMPT_ARGV_MAX_BYTES } from "../shared/prompt-limits.ts";
 
 export interface AgentRunOptions {
+  /** Core-owned sprint task: pin subscription routing and disable delegation. */
+  sprintManaged?: boolean;
   /** Friendly mode id; see AGENT_OPTIONS in shared/types.ts. */
   mode?: string | null;
   /** Friendly model id; see AGENT_OPTIONS in shared/types.ts. */
@@ -620,12 +622,13 @@ export function buildCommand(
     // map sets the var (e.g. to "true") in charge of its own launches.
     // Both the fresh and the `resumeSessionId` launches pass through here.
     env.CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION ??= "false";
-    const extra = (process.env.AGETOR_CLAUDE_ARGS ?? "").split(/\s+/).filter(Boolean);
+    const extra = opts.sprintManaged ? [] : (process.env.AGETOR_CLAUDE_ARGS ?? "").split(/\s+/).filter(Boolean);
 
     // Interactive launch — no --print. Model, permission-mode, session-id,
     // and resume flags all work identically in interactive mode; they set
     // the initial state of the session.
     const args: string[] = [bin];
+    if (opts.sprintManaged) args.push("--disallowedTools", "Agent", "Task");
 
     if (!opts.model) {
       throw new Error("model is required for claude-code");
@@ -922,7 +925,8 @@ export function buildCommand(
       major,
     });
     env.OPENCODE_DISABLE_AUTOUPDATE ??= "1";
-    const extra = (process.env.AGETOR_OPENCODE_ARGS ?? "").split(/\s+/).filter(Boolean);
+    if (opts.sprintManaged) env.OPENCODE_CONFIG_CONTENT = JSON.stringify({ model: opts.model, small_model: opts.model, enabled_providers: ["opencode-go"], permission: { "*": "allow", task: "deny" } });
+    const extra = opts.sprintManaged ? [] : (process.env.AGETOR_OPENCODE_ARGS ?? "").split(/\s+/).filter(Boolean);
     const title = opencodeTitleArg(opts.title);
 
     const assemble = (resumeId: string | null): string[] => {
@@ -1031,9 +1035,10 @@ export function buildCommand(
     // codex — hosted in tmux via codex-tmux.ts. The prompt is NOT an argv
     // element: it's delivered on stdin (the trailing `-`), so the driver can
     // pipe a prompt file in and no user text touches the shell wrapper.
-    const extra = (process.env.AGETOR_CODEX_ARGS ?? "").split(/\s+/).filter(Boolean);
+    const extra = opts.sprintManaged ? [] : (process.env.AGETOR_CODEX_ARGS ?? "").split(/\s+/).filter(Boolean);
 
     const args: string[] = [bin, "exec"];
+    if (opts.sprintManaged) args.push("-c", "model_provider=openai", "-c", "forced_login_method=chatgpt", "-c", "features.multi_agent=false");
 
     if (!opts.model) {
       throw new Error("model is required for codex");
@@ -3789,7 +3794,9 @@ export function buildFxLaunchOptions(args: SpawnAgentArgs, built: AgentCommand):
  * function, just resolved immediately.
  */
 export async function spawnAgent(args: SpawnAgentArgs): Promise<SpawnedAgent> {
-  const { taskId, runId, harness, prompt, cwd, onChunk, onSessionId, opts = {} } = args;
+  const { taskId, runId, harness, prompt, cwd, onChunk, onSessionId, opts: requestedOpts = {} } = args;
+  const managed = sprintTaskOwner(taskId) !== null;
+  const opts = managed ? { ...requestedOpts, sprintManaged: true, opencodeServer: "standalone" as const } : requestedOpts;
 
   if (harness.kind === "claude-code") {
     if (process.env.AGETOR_CLAUDE_DRIVER === "fake") {

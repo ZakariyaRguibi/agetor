@@ -46,3 +46,7 @@ Routes: `GET /db/stats` (`DbStats`), `POST /db/compact`, `POST /db/retention/run
 A new `run_events` method that isn't exercised by that test fails it by name.
 
 **Adding a migration** (numbered `.sql` files, the `migrations/index.ts` entry, never editing an applied one, and why the SQL is inlined at bundle time) is described once, in [CLAUDE.md § Persistence, in brief](../../CLAUDE.md#persistence-in-brief).
+
+## Additive native sprint migrations
+
+082 stores revisioned sprint payloads; 083 journals direct command identity/completion; 084 maps task ownership to sprints. All are additive and leave existing task/pipeline records intact. Approval hashes bind specification, selected batch and actual profile/harness routes. Transactional revision checks protect writes; no transaction spans Git, HTTP or process work. Attempt/repair/quota ledgers survive pause/restart and requirement revisions, including retired ticket keys. See [native sprints](sprints.md).

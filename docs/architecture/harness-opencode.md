@@ -52,3 +52,7 @@ Capability discovery (`commands.ts`, `ref-tree.ts`): user commands under `<home>
 
 **Ships disabled, then auto-enables once its CLI is found** (the rule in [harnesses.md](harnesses.md)).
 Env seams: `AGETOR_OPENCODE_BIN`, `AGETOR_OPENCODE_ARGS` (spliced after the built-in flags), `AGETOR_OPENCODE_DRIVER=fake` (`makeFakeOpencodeAgent` feeds canned v2 NDJSON through the real `createOpencodeLineProcessor`; markers `__agetor_fake_opencode_subagent__` — the child id `ses_fakechild<id8>` is served by `runOpencodeExport`'s fake branch — `__agetor_fake_opencode_error__` and `__agetor_fake_opencode_resume_fail__`; `kill()` resolves 130) and `AGETOR_HARNESS_AUTO_ENABLE`.
+
+## Sprint-managed OpenCode
+
+Managed sprint launches force standalone execution and set process-local `OPENCODE_CONFIG_CONTENT` to pin `model` and `small_model` to the selected Go DeepSeek model, allow only the `opencode-go` provider, and deny task delegation. They ignore `AGETOR_OPENCODE_ARGS`. This overrides no saved harness/account settings. Native billing preflight requires the approved Go provider; account-side extra usage must remain disabled. See [native sprints](sprints.md).

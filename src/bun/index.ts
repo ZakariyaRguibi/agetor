@@ -27,6 +27,7 @@ import { resumeIncompleteOpencodeImports } from "./opencode-session-import.ts";
 import { checkAllHarnesses } from "./agent-status.ts";
 import { applyHarnessAutoEnable } from "./harness-auto-enable.ts";
 import { initPipelineRunner, reconcilePipelineRuns } from "./pipeline-runner.ts";
+import { initSprints } from "./sprint-controller.ts";
 import { beginLagLabel, startLagMonitor, stopLagMonitor } from "./event-loop-lag.ts";
 import { scheduleRetention, stopRetentionTimers } from "./retention.ts";
 import { ensureDisclaimedServer } from "./tmux-resolution.ts";
@@ -428,6 +429,7 @@ try {
   // `initPipelineRunner()` above) before this does its own pass over parent
   // rows directly.
   const reconciledPipelineRunCount = await reconcilePipelineRuns();
+  await initSprints((notice) => taskNotifier.post(notice));
   if (reconciledPipelineRunCount > 0) {
     console.log(`[agetor] reconciled ${reconciledPipelineRunCount} pipeline run(s)`);
   }

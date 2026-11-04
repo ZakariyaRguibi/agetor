@@ -18,6 +18,7 @@
 import { existsSync, statSync } from "node:fs";
 import { mkdir, writeFile, readFile, copyFile, rm } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const SRC = path.join(REPO_ROOT, "native", "notifier", "notifier.swift");
@@ -74,7 +75,7 @@ async function main() {
     const exeMtime = statSync(EXE).mtimeMs;
     // Rebuild when any input changed: the Swift source, the Info.plist, the
     // iconset dir (catches icon add/remove), or this build script itself.
-    const selfPath = new URL(import.meta.url).pathname;
+    const selfPath = fileURLToPath(import.meta.url);
     const sources = [SRC, PLIST, selfPath, ...(existsSync(ICONSET) ? [ICONSET] : [])];
     const newestSource = Math.max(...sources.map((s) => statSync(s).mtimeMs));
     const stamp = (await readFile(STAMP, "utf8")).trim();

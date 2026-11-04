@@ -49,6 +49,7 @@ import { useAgentProfiles } from "@/lib/agent-profiles";
 import { pipelineAttentionStepTask, usePipelines } from "@/lib/pipelines";
 import { discardBoardDeparture, recordBoardDeparture, restoreBoardScroll, saveBoardScroll } from "@/lib/board-scroll";
 import { PipelineEditor, PipelinesPage, PipelineRunView } from "@/components/pipelines";
+import { SprintsPage } from "@/components/sprints/SprintsPage";
 import { SettingsDialog } from "@/components/settings/SettingsDialog";
 import { FontSizeProvider, useFontSize } from "@/components/font-size-provider";
 import { ThemeProvider, useTheme } from "@/components/theme-provider";
@@ -210,6 +211,7 @@ const ICON_BY_ACTION: Record<TaskMenuAction, LucideIcon> = {
  */
 type AppView =
   | { kind: "board" }
+  | { kind: "sprints" }
   | { kind: "pipelines"; pipelineId: string | null; editing: boolean }
   | { kind: "pipeline-run"; taskId: string };
 
@@ -220,6 +222,8 @@ function viewMountKey(view: AppView): string {
   switch (view.kind) {
     case "board":
       return "board";
+    case "sprints":
+      return "sprints";
     case "pipelines":
       return view.editing ? `pipelines-editor-${view.pipelineId ?? "new"}` : "pipelines-list";
     case "pipeline-run":
@@ -1459,6 +1463,7 @@ function AppInner() {
       // Resolve a display title from the latest tasks snapshot; fall back to
       // a short id slice if the row hasn't been polled in yet.
       const task = tasksRef.current.find((t) => t.id === ev.taskId);
+      if ((ev.sprintId || task?.sprintId) && ev.kind !== "interaction") return;
       const title = task?.title || `Task ${ev.taskId.slice(0, 7)}`;
       const subtitle = task?.agent;
       const onOpen = () => {
@@ -2507,6 +2512,7 @@ const runTaskMenuAction = useCallback((action: TaskMenuAction, snapshot: Task) =
           >
             <Workflow className="size-4" />
           </Button>
+          <Button variant={view.kind === "sprints" ? "secondary" : "ghost"} size="sm" data-testid="sprints-button" onClick={() => navigate({ kind: "sprints" })}>Sprints</Button>
           <Button
             variant="ghost"
             size="icon"
@@ -2519,6 +2525,7 @@ const runTaskMenuAction = useCallback((action: TaskMenuAction, snapshot: Task) =
         </div>
       </header>
       <div className="flex min-h-0 flex-1">
+        <div className={view.kind === "sprints" ? "hidden" : "contents"}>
         <NewTaskForm
           agents={agents}
           harnesses={harnesses}
@@ -2564,6 +2571,7 @@ const runTaskMenuAction = useCallback((action: TaskMenuAction, snapshot: Task) =
             }
           }}
         />
+        </div>
         <main className="flex min-w-0 flex-1 flex-col">
           {/* Chrome that stays mounted regardless of `view` (D5,
               docs/plans/pipelines.md): update/tmux banners and the global
@@ -2582,6 +2590,7 @@ const runTaskMenuAction = useCallback((action: TaskMenuAction, snapshot: Task) =
           <ErrorToast error={error} onDismiss={() => setError(null)} />
           <Toaster panelOpen={panelMounted} />
           <AnimatePresence mode="wait">
+            {view.kind === "sprints" && <motion.div key="sprints" className="flex min-h-0 flex-1 flex-col"><SprintsPage onBack={() => navigate({ kind: "board" })} onOpenLog={async (id) => openTask(await api.getTask(id))} /></motion.div>}
             {view.kind === "board" && (
               <motion.div
                 key="board"

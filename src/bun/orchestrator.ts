@@ -4,6 +4,7 @@ import { rm } from "node:fs/promises";
 import { basename, isAbsolute, join, resolve } from "node:path";
 import {
   db,
+  sprintTaskOwner,
   tasks,
   runs,
   harnesses,
@@ -721,7 +722,11 @@ function stampPipelineParent(e: GlobalEvent): GlobalEvent {
  *  `drain*Queue` calls run AFTER its `emitGlobal`, and would be silently
  *  skipped otherwise). */
 function emitGlobal(e: GlobalEvent) {
-  const stamped = stampPipelineParent(e);
+  let stamped = stampPipelineParent(e);
+  if ("taskId" in stamped) {
+    const owner = sprintTaskOwner(stamped.taskId);
+    if (owner) stamped = { ...stamped, sprintId: owner.sprintId };
+  }
   for (const fn of globalListeners) {
     try {
       fn(stamped);
@@ -1909,7 +1914,9 @@ export function isTaskRunCancelling(taskId: string): boolean {
  */
 export async function startTask(
   taskId: string,
+  owner?: "sprint",
 ): Promise<{ runId: string; unresolvedRefs?: string[]; pending?: true } | { error: string; code?: string }> {
+  if (sprintTaskOwner(taskId) && owner !== "sprint") return { error: "This task is managed by a sprint; use its Run, Pause or Resume controls" };
   let task = tasks.get(taskId);
   if (!task) return { error: "task not found" };
   if (launchesFrozenFlag) return { error: LAUNCHES_FROZEN_REASON, code: "launches-frozen" };

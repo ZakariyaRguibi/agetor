@@ -72,6 +72,12 @@ export async function checkForUpdate(): Promise<void> {
   if (inFlight) return inFlight;
   inFlight = (async () => {
     try {
+      // A locally installed fork has no release feed. Never replace it with
+      // an upstream bundle merely because that bundle has a different hash.
+      if (!await Updater.localInfo.baseUrl()) {
+        setStatus("idle", { version: await Updater.localInfo.version() });
+        return;
+      }
       setStatus("checking");
       const info = await Updater.checkForUpdate();
       if (info.error) {
@@ -120,6 +126,7 @@ export async function checkForUpdate(): Promise<void> {
  * back to the client at that point.
  */
 export async function applyUpdate(): Promise<void> {
+  if (!await Updater.localInfo.baseUrl()) throw new Error("Automatic updates are disabled for this local build");
   // Tell the background supervisor this quit is an update (D8): it takes the
   // port back and waits for the relaunch instead of reading the app's
   // disappearance as a crash. Never blocks the update.

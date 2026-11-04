@@ -1995,9 +1995,9 @@ test("077_copilot_harness is only backfilled, never re-run, on a DB that already
   db.close();
 });
 
-test("081 (cursor asks) is the last registered migration, after 080 (harness auto-enabled), after 079 (opencode task fields), after 078 (opencode harness), after 077 (copilot harness)", () => {
+test("081 (cursor asks) follows the harness migrations and precedes the additive sprint migrations", () => {
   const at = migrations.findIndex((m) => m.id === "081_cursor_asks");
-  expect(at).toBe(migrations.length - 1);
+  expect(migrations.slice(at + 1).map((migration) => migration.id)).toEqual(["082_sprints", "083_sprint_commands", "084_sprint_tasks"]);
   expect(migrations[at - 1]?.id).toBe("080_harness_auto_enabled");
   expect(migrations[at - 2]?.id).toBe("079_opencode_task_fields");
   expect(migrations[at - 3]?.id).toBe("078_opencode_harness");
@@ -2036,6 +2036,9 @@ test("078-080 on a 077-era DB keep every harnesses row and column, seed a disabl
     "079_opencode_task_fields",
     "080_harness_auto_enabled",
     "081_cursor_asks",
+    "082_sprints",
+    "083_sprint_commands",
+    "084_sprint_tasks",
   ]);
   expect(db.query(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'cursor_asks'`).get()).toBeTruthy();
 

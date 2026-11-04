@@ -34,6 +34,7 @@
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const SRC = path.join(REPO_ROOT, "native", "login-item", "main.swift");
@@ -103,7 +104,7 @@ async function main() {
   // with the identity we'd use now, and the copied plists are all in place.
   if (existsSync(EXE) && existsSync(STAMP) && plists.every((p) => existsSync(path.join(PLIST_OUT_DIR, p)))) {
     const exeMtime = statSync(EXE).mtimeMs;
-    const selfPath = new URL(import.meta.url).pathname;
+    const selfPath = fileURLToPath(import.meta.url);
     const inputs = [SRC, selfPath, ...plists.map((p) => path.join(PLIST_SRC_DIR, p))];
     const newestInput = Math.max(...inputs.map((s) => statSync(s).mtimeMs));
     const stamp = (await readFile(STAMP, "utf8")).trim();
