@@ -9,7 +9,7 @@ import { ASSISTANT_MD_COMPONENTS, MD_URL_TRANSFORM } from "@/components/kanban/m
 import { api } from "@/lib/api";
 import { useAgentProfiles } from "@/lib/agent-profiles";
 import { registerLeaveGuard } from "@/lib/leave-guard";
-import { selectedSprintTickets, sprintApprovalIssues, SPRINT_DRAFT_JOBS, validateSprintInput, type Sprint, type SprintInput } from "../../../shared/sprint.ts";
+import { selectedSprintTickets, sprintApprovalIssues, SPRINT_DRAFT_JOBS, SPRINT_LIMITS, validateSprintInput, type Sprint, type SprintInput } from "../../../shared/sprint.ts";
 import { SprintChecksEditor, SprintDisclosure, SprintTicketsEditor, sprintSelect, sprintTextarea } from "./SprintEditors";
 
 const steps = ["Brief", "Specification", "Tickets", "Review & run"] as const;
@@ -42,10 +42,44 @@ function normalize(input: SprintInput): SprintInput {
   };
 }
 
-function SprintProgress({ sprint }: { sprint: Sprint }) {
+function reviewFindings(error: string | null): string[] {
+  const prefix = "Review blocked: ";
+  if (!error?.startsWith(prefix)) return [];
+  try {
+    const result: { findings?: unknown } = JSON.parse(error.slice(prefix.length));
+    if (!Array.isArray(result?.findings)) return [];
+    return result.findings.flatMap((finding) => {
+      if (typeof finding === "string") return [finding];
+      if (typeof finding?.message !== "string") return [];
+      return [typeof finding.priority === "string" ? finding.priority + " · " + finding.message : finding.message];
+    });
+  } catch { return []; }
+}
+
+function SprintProgress({ sprint, onOpenLog, onEditTickets }: { sprint: Sprint; onOpenLog: (taskId: string) => void; onEditTickets: () => void }) {
   const selected = selectedSprintTickets(sprint.input);
   const passed = selected.filter((ticket) => sprint.state[ticket.key]?.status === "passed").length;
+  const failed = selected.filter((ticket) => sprint.state[ticket.key]?.status === "failed");
   return <div className="space-y-4">
+    {failed.length > 0 && <section className={panel + " space-y-4"} aria-label="Sprint failures">
+      <h3 className="flex items-center gap-2 font-semibold"><CircleAlert aria-hidden className="size-4 text-warning" />What needs attention</h3>
+      {failed.map((ticket) => {
+        const state = sprint.state[ticket.key]!;
+        const findings = reviewFindings(state.error);
+        const failedCheck = state.checks.find((check) => check.exitCode !== 0);
+        return <article key={ticket.key} className="space-y-2 border-t border-border pt-3 text-sm">
+          <h4 className="font-medium">{ticket.key} · {ticket.title}</h4>
+          <p className="text-muted-foreground">{findings.length ? "Reviewer requested changes" : failedCheck ? failedCheck.name + " failed" : "Ticket failed"} · {state.repairs}/{SPRINT_LIMITS.repairs} automatic repairs used</p>
+          {findings.length ? <ul className="list-disc space-y-1 break-words pl-5">{findings.map((finding, index) => <li key={index}>{finding}</li>)}</ul> : state.error && <pre className="max-h-44 overflow-auto whitespace-pre-wrap break-words rounded bg-muted p-2 text-xs">{state.error}</pre>}
+          <div className="flex flex-wrap gap-2">
+            {state.reviewTaskId && <Button type="button" size="sm" variant="outline" onClick={() => onOpenLog(state.reviewTaskId!)}>Open review log</Button>}
+            {state.taskId && <Button type="button" size="sm" variant="outline" onClick={() => onOpenLog(state.taskId!)}>Open build log</Button>}
+          </div>
+        </article>;
+      })}
+      <p className="text-sm text-muted-foreground">Review the findings, edit the affected tickets or verification commands, then approve the revised batch.</p>
+      <Button type="button" size="sm" variant="outline" onClick={onEditTickets}>Edit tickets and checks</Button>
+    </section>}
     <section className={panel}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="font-semibold">{statusLabel[sprint.status]}</h3>
@@ -69,7 +103,7 @@ function SprintProgress({ sprint }: { sprint: Sprint }) {
   </div>;
 }
 
-export function SprintsPage({ onBack }: { onBack: () => void }) {
+export function SprintsPage({ onBack, onOpenLog }: { onBack: () => void; onOpenLog: (taskId: string) => Promise<void> }) {
   const { profiles, loaded: profilesLoaded, refresh: refreshProfiles } = useAgentProfiles();
   const confirm = useConfirm();
   const [sprints, setSprints] = useState<Sprint[]>([]);
@@ -295,7 +329,7 @@ export function SprintsPage({ onBack }: { onBack: () => void }) {
             </fieldset>
           </>}
 
-          {step === 3 && (progress && current ? <SprintProgress sprint={current} /> : <>
+          {step === 3 && (progress && current ? <SprintProgress sprint={current} onEditTickets={() => go(2)} onOpenLog={(id) => { void onOpenLog(id).catch((err) => setError(err instanceof Error ? err.message : String(err))); }} /> : <>
             <section className={panel + " space-y-3"}>
               <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-semibold">{selected.length} selected {selected.length === 1 ? "ticket" : "tickets"}</h3><Button variant="ghost" size="sm" type="button" onClick={() => go(2)}>Edit tickets</Button></div>
               <ul className="divide-y divide-border">{selected.map((ticket) => <li key={ticket.key} className="py-2 text-sm"><span className="mr-2 font-mono text-xs text-muted-foreground">{ticket.key}</span>{ticket.title}</li>)}</ul>

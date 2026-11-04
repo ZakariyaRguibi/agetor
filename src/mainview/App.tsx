@@ -2590,7 +2590,7 @@ const runTaskMenuAction = useCallback((action: TaskMenuAction, snapshot: Task) =
           <ErrorToast error={error} onDismiss={() => setError(null)} />
           <Toaster panelOpen={panelMounted} />
           <AnimatePresence mode="wait">
-            {view.kind === "sprints" && <motion.div key="sprints" className="flex min-h-0 flex-1 flex-col"><SprintsPage onBack={() => navigate({ kind: "board" })} /></motion.div>}
+            {view.kind === "sprints" && <motion.div key="sprints" className="flex min-h-0 flex-1 flex-col"><SprintsPage onBack={() => navigate({ kind: "board" })} onOpenLog={async (id) => openTask(await api.getTask(id))} /></motion.div>}
             {view.kind === "board" && (
               <motion.div
                 key="board"

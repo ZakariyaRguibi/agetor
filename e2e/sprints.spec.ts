@@ -3,6 +3,7 @@ import path from "node:path";
 import { test, expect } from "./fixtures";
 import { gotoApp } from "./helpers";
 import { initialTicketState, type Sprint } from "../src/shared/sprint";
+import { sprintFixture } from "../src/test-sprint-fixture";
 
 test("guided sprint approval keeps draft saves inert and preserves edits", async ({ page, backend }) => {
   test.setTimeout(60_000);
@@ -107,5 +108,38 @@ test("guided sprint approval keeps draft saves inert and preserves edits", async
     await expect(main.getByRole("button", { name: "Run sprint", exact: true })).toBeEnabled();
     await nav.getByRole("button", { name: /Brief/ }).click();
     await expect(main.getByRole("textbox", { name: "Sprint name", exact: true })).toHaveValue("Living Atlas pilot");
+
   } finally { db.close(); }
+});
+
+test("a failed sprint shows review findings and opens the review log", async ({ page, backend }) => {
+  const headers = { authorization: "Bearer " + backend.apiToken };
+  const created = await page.request.post(backend.apiBase + "/sprints", {
+    headers, data: { ...sprintFixture(), workdir: backend.dataDir },
+  });
+  expect(created.ok()).toBe(true);
+  const sprint = await created.json() as Sprint;
+  const review = await page.request.post(backend.apiBase + "/tasks", {
+    headers,
+    data: { title: "Fixture independent review", prompt: "Inspect browser evidence", workdir: backend.dataDir, isolation: "none", agent: "claude-code" },
+  });
+  expect(review.ok()).toBe(true);
+  const reviewTask = await review.json() as { id: string };
+  sprint.status = "needs_attention";
+  sprint.integrationTaskId = reviewTask.id;
+  sprint.state["LA-01"] = {
+    ...initialTicketState(), status: "failed", repairs: 3, reviewTaskId: reviewTask.id,
+    error: 'Review blocked: {"findings":[{"priority":"P1","message":"Show the negative browser smoke result."}]}',
+  };
+  sprint.revision++;
+  const db = new Database(path.join(backend.dataDir, "agetor.sqlite"));
+  try { db.run("UPDATE sprints SET payload = ?, revision = ? WHERE id = ?", [JSON.stringify(sprint), sprint.revision, sprint.id]); }
+  finally { db.close(); }
+
+  await gotoApp(page, backend.bootBase);
+  await page.getByTestId("sprints-button").click();
+  const failures = page.getByRole("region", { name: "Sprint failures" });
+  await expect(failures.getByText("P1 · Show the negative browser smoke result.")).toBeVisible();
+  await failures.getByRole("button", { name: "Open review log" }).click();
+  await expect(page.locator("aside").last()).toContainText("Fixture independent review");
 });

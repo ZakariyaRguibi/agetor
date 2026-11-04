@@ -4,7 +4,7 @@ Native sprints add an approved backlog and dependency scheduler to Agetor. Exist
 
 This is experimental source in the ZakariyaRguibi fork. Downloading the upstream Agetor release does not include it. A local installed build includes both pipeline starters and native sprints while retaining existing Agetor data.
 
-For a local installed package, build using `env -u ELECTROBUN_DEVELOPER_ID AGETOR_LOCAL_BUILD=1 bun run build:stable` with system `tmux` on PATH. This produces version `1.1.0-local.2` on the stable data directory, skips maintainer signing/notarization, and disables the upstream update feed. Ad-hoc sign the generated app before installing it. Preserve a backup of the existing app and SQLite database before replacement. The macOS background login-item option requires Developer ID signing and is unavailable in an ad-hoc local build; keep the app open while a sprint runs.
+For a local installed package, build using `env -u ELECTROBUN_DEVELOPER_ID AGETOR_LOCAL_BUILD=1 bun run build:stable` with system `tmux` on PATH. This produces version `1.1.0-local.3` on the stable data directory, skips maintainer signing/notarization, and disables the upstream update feed. Ad-hoc sign the generated app before installing it. Preserve a backup of the existing app and SQLite database before replacement. The macOS background login-item option requires Developer ID signing and is unavailable in an ad-hoc local build; keep the app open while a sprint runs.
 
 ## Start the development app
 
@@ -37,6 +37,8 @@ Open **Sprints** in the top bar. The app reopens your last saved sprint, and **N
 4. **Review & run:** review the selected titles and delivery choice. Use the visible **Before approval** list to resolve missing settings. Choose a local branch or GitHub PR/merge. Click **Approve batch**, read the concrete confirmation, then **Run sprint** when ready. The same screen displays progress and expandable execution evidence.
 
 **Save draft** never starts or regenerates anything. It preserves completed planning and the current specification approval unless the brief/spec changes. A pre-run draft paused during generation can be saved and approved again without starting a model. Use an explicit **Generate** button only when you want a new generation pass. Batch approval records permission; **Run sprint** starts implementation.
+
+If a ticket fails, **Review & run → What needs attention** shows its findings and repair count. Open the review or build log for the worker transcript. Expand **Execution evidence** for command output. After the automatic repair limit is reached, use **Edit tickets and checks** to address the findings, then approve the revised batch.
 
 Commands are direct argv arrays. Enter one argument per line; shell operators and glob expansion are literal. Include worktree setup, tests, lint, type checks, builds and smoke checks as appropriate. Keep Linux provisioning and machine-wide configuration out of the local checks. UI changes require an approved browser/e2e check.
 
